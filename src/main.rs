@@ -23,38 +23,47 @@ struct Args {
     m_option: bool,
 
     /// Path to the file to operate on.
-    #[arg(short, long, required = true)]
-    filename: String,
+    #[arg(short, long)]
+    filename: Option<String>
 }
 
 pub mod wc {
-    pub fn byte_count(filename: &str) -> u64 {
-        let contents = std::fs::File::open(filename)
-            .expect("Could not open file.");
-        contents.metadata().unwrap().len()
+    pub struct Content {
+        contents: String,
     }
 
-    pub fn line_count(filename: &str) -> u64 {
-        let contents = std::fs::read_to_string(filename)
-            .expect("Could not open file.");
-        contents.lines().count() as u64
-    }
+    impl Content {
+        pub fn from_file(filename: &str) -> Content {
+            let contents = std::fs::read_to_string(filename)
+                .expect("Could not open file.");
+            Content { contents }
+        }
 
-    pub fn word_count(filename: &str) -> u64 {
-        let contents = std::fs::read_to_string(filename)
-            .expect("Could not open file.");
-        contents.split_whitespace().count() as u64
-    }
+        pub fn from_stdin() -> Content {
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).unwrap();
+            Content { contents: input }
+        }
 
-    pub fn character_count(filename: &str) -> u64 {
-        let contents = std::fs::read_to_string(filename)
-            .expect("Could not open file.");
-        contents.chars().count() as u64
+        pub fn byte_count(&self) -> u64 {
+            self.contents.len() as u64
+        }
+
+        pub fn line_count(&self) -> u64 {
+            self.contents.lines().count() as u64
+        }
+
+        pub fn word_count(&self) -> u64 {
+            self.contents.split_whitespace().count() as u64
+        }
+
+        pub fn character_count(&self) -> u64 {
+            self.contents.chars().count() as u64
+        }
     }
 }
 
-fn main() {
-    let mut args = Args::parse();
+fn process_content(content: wc::Content, mut args: Args) {
     // If no options are provided, default to -clw.
     if !args.c_option && !args.l_option && !args.w_option && !args.m_option {
         args.c_option = true;
@@ -63,18 +72,32 @@ fn main() {
     }
 
     if args.c_option {
-        print!("{}\t", wc::byte_count(args.filename.as_str()));
+        print!("{}\t", content.byte_count());
     }
     if args.l_option {
-        print!("{}\t", wc::line_count(args.filename.as_str()));
+        print!("{}\t", content.line_count());
     }
     if args.w_option {
-        print!("{}\t", wc::word_count(args.filename.as_str()));
+        print!("{}\t", content.word_count());
     }
     if args.m_option {
-        print!("{}\t", wc::character_count(args.filename.as_str()));
+        print!("{}\t", content.character_count());
     }
-    print!("{}", args.filename);
+}
+
+fn main() {
+    let args = Args::parse();
+
+    if let Some(ref filename) = args.filename {
+        let cloned_filename = filename.clone();
+        let content = wc::Content::from_file(&filename);
+        process_content(content, args);
+        print!("{}", cloned_filename);
+    } else {
+        // Process stdin if no file is provided.
+        let content = wc::Content::from_stdin();
+        process_content(content, args);
+    }
 }
 
 #[cfg(test)]
@@ -88,9 +111,10 @@ mod test {
             l_option: false,
             m_option: false,
             w_option: false,
-            filename: "test.txt".to_string(),
+            filename: Option::from("test.txt".to_string()),
         };
-        assert_eq!(wc::byte_count(args.filename.as_str()), 342190);
+        let content = wc::Content::from_file(args.filename.unwrap().as_str());
+        assert_eq!(content.byte_count(), 342190);
     }
 
     #[test]
@@ -100,9 +124,10 @@ mod test {
             l_option: true,
             m_option: false,
             w_option: false,
-            filename: "test.txt".to_string(),
+            filename: Some("test.txt".to_string()),
         };
-        assert_eq!(wc::line_count(args.filename.as_str()), 7145);
+        let content = wc::Content::from_file(args.filename.unwrap().as_str());
+        assert_eq!(content.line_count(), 7145);
     }
 
     #[test]
@@ -112,9 +137,10 @@ mod test {
             l_option: false,
             m_option: false,
             w_option: true,
-            filename: "test.txt".to_string(),
+            filename: Some("test.txt".to_string()),
         };
-        assert_eq!(wc::word_count(args.filename.as_str()), 58164);
+        let content = wc::Content::from_file(args.filename.unwrap().as_str());
+        assert_eq!(content.word_count(), 58164);
     }
 
     #[test]
@@ -124,8 +150,9 @@ mod test {
             l_option: false,
             m_option: true,
             w_option: false,
-            filename: "test.txt".to_string(),
+            filename: Some("test.txt".to_string()),
         };
-        assert_eq!(wc::character_count(args.filename.as_str()), 339292);
+        let content = wc::Content::from_file(args.filename.unwrap().as_str());
+        assert_eq!(content.character_count(), 339292);
     }
 }
